@@ -255,18 +255,26 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 	return true;
 }
 
+void usage(const char* prog_name)
+{
+	printf("Usage: %s [-d delay_ms] [-b click_button] <-t trigger_button> <-i device_id>\n"
+		   "       or\n"
+		   "       %s --calibrate\n"
+		   "       or\n"
+		   "       %s --list\n",
+		   prog_name,
+		   prog_name,
+		   prog_name);
+}
+
 int main(int argc, char** argv)
 {
 	Display* display = XOpenDisplay(NULL);
 	opts_t opts;
 
-	if (!read_opts(argc, argv, &opts) || opts.device_id < 0 || opts.trigger_button < 0)
+	if (!read_opts(argc, argv, &opts))
 	{
-		printf("Usage: %s [-d delay_ms] [-b click_button] <-t trigger_button> <-i device_id>\n"
-		       "       or\n"
-			   "       %s --calibrate\n",
-			   argv[0],
-			   argv[0]);
+		usage(argv[0]);
 		return EINVAL;
 	}
 
@@ -285,6 +293,12 @@ int main(int argc, char** argv)
 	}
 
 	// Normal operation
+	if (opts.device_id < 0 || opts.trigger_button < 0)
+	{
+		usage(argv[0]);
+		return EINVAL;
+	}
+
 	XDevice* device = XOpenDevice(display, opts.device_id);
 
 	while (true)
