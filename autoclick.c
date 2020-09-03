@@ -223,7 +223,7 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 			case 't': // Trigger
 				opts->trigger_button = strtol(argv[++i], NULL, 10);
 				break;
-			case 'v': // Device ID
+			case 'i': // Device ID
 				opts->device_id = strtol(argv[++i], NULL, 10);
 				break;
 			case '-':
@@ -262,7 +262,7 @@ int main(int argc, char** argv)
 
 	if (!read_opts(argc, argv, &opts) || opts.device_id < 0 || opts.trigger_button < 0)
 	{
-		printf("Usage: %s [-d delay_ms] [-b click_button] <-t trigger_button> <-v device_id>\n"
+		printf("Usage: %s [-d delay_ms] [-b click_button] <-t trigger_button> <-i device_id>\n"
 		       "       or\n"
 			   "       %s --calibrate\n",
 			   argv[0],
