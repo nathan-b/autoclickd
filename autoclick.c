@@ -1,13 +1,12 @@
 #include <X11/extensions/XTest.h>
-
-#include <stdlib.h>
-#include <time.h>
 #include <errno.h>
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <time.h>
 
 typedef struct
 {
@@ -23,16 +22,16 @@ typedef struct
 
 void msleep(uint32_t ms)
 {
-    struct timespec ts;
-    int res;
+	struct timespec ts;
+	int res;
 
-    ts.tv_sec = ms / 1000;
-    ts.tv_nsec = (ms % 1000) * 1000000;
+	ts.tv_sec = ms / 1000;
+	ts.tv_nsec = (ms % 1000) * 1000000;
 
-    do 
+	do
 	{
-        res = nanosleep(&ts, &ts);
-    } while (res && errno == EINTR);
+		res = nanosleep(&ts, &ts);
+	} while (res && errno == EINTR);
 }
 
 /**
@@ -52,21 +51,17 @@ void do_click(Display* display, int button)
 void find_mouse_device(Display* display)
 {
 	XDeviceInfo* info;
-    int num_devices;
+	int num_devices;
 
-    info = XListInputDevices(display, &num_devices);
+	info = XListInputDevices(display, &num_devices);
 
-    for (int i = 0; i < num_devices; ++i) 
+	for (int i = 0; i < num_devices; ++i)
 	{
-        if (info[i].use == IsXPointer ||
-		    info[i].use == IsXExtensionPointer)
+		if (info[i].use == IsXPointer || info[i].use == IsXExtensionPointer)
 		{
-			printf("Found pointing device (%d): %s -> %d\n",
-					info[i].use,
-					info[i].name,
-					(int)info[i].id);
+			printf("Found pointing device (%d): %s -> %d\n", info[i].use, info[i].name, (int)info[i].id);
 		}
-    }
+	}
 
 	XFreeDeviceList(info);
 }
@@ -78,7 +73,7 @@ bool check_button_state(Display* display, XDevice* device, int button)
 {
 	bool ret = false;
 	XDeviceState* st = XQueryDeviceState(display, device);
-	
+
 	if (!st)
 	{
 		fprintf(stderr, "Cannot query device state\n");
@@ -125,15 +120,15 @@ void do_calibrate(Display* display)
 	printf("Press the mouse button you want to identify\n");
 	int button = 0;
 	Window root = RootWindow(display, 0);
-	XGrabPointer(display, 
-	             root, 
-				 False, 
-				 ButtonPressMask | ButtonReleaseMask,
-				 GrabModeAsync,
-				 GrabModeAsync,
-				 root,
-				 None,
-				 CurrentTime);
+	XGrabPointer(display,
+	             root,
+	             False,
+	             ButtonPressMask | ButtonReleaseMask,
+	             GrabModeAsync,
+	             GrabModeAsync,
+	             root,
+	             None,
+	             CurrentTime);
 
 	while (!found)
 	{
@@ -144,7 +139,7 @@ void do_calibrate(Display* display)
 		// Get the list of devices each time in case it changes
 		info = XListInputDevices(display, &num_devices);
 
-		for (int i = 0; i < num_devices; ++i) 
+		for (int i = 0; i < num_devices; ++i)
 		{
 			int num_buttons = 0;
 
@@ -163,18 +158,14 @@ void do_calibrate(Display* display)
 			{
 				continue;
 			}
-			
+
 			// Get an XDevice from the device info
 			XDevice* device = XOpenDevice(display, info[i].id);
 			button = find_pressed_button(display, device, num_buttons);
 			if (button > 0)
 			{
-				printf("Found button: %s -> device %d button %d\n",
-						info[i].name,
-						(int)info[i].id,
-						button);
+				printf("Found button: %s -> device %d button %d\n", info[i].name, (int)info[i].id, button);
 				found = true;
-
 			}
 		}
 
@@ -214,16 +205,16 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 			// Parse flag
 			switch (argv[i][1])
 			{
-			case 'd': // Delay
+			case 'd':  // Delay
 				opts->delay_ms = strtoul(argv[++i], NULL, 10);
 				break;
-			case 'b': // Button
+			case 'b':  // Button
 				opts->click_button = strtol(argv[++i], NULL, 10);
 				break;
-			case 't': // Trigger
+			case 't':  // Trigger
 				opts->trigger_button = strtol(argv[++i], NULL, 10);
 				break;
-			case 'i': // Device ID
+			case 'i':  // Device ID
 				opts->device_id = strtol(argv[++i], NULL, 10);
 				break;
 			case '-':
@@ -257,14 +248,15 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 
 void usage(const char* prog_name)
 {
-	printf("Usage: %s [-d delay_ms] [-b click_button] <-t trigger_button> <-i device_id>\n"
-		   "       or\n"
-		   "       %s --calibrate\n"
-		   "       or\n"
-		   "       %s --list\n",
-		   prog_name,
-		   prog_name,
-		   prog_name);
+	printf(
+	    "Usage: %s [-d delay_ms] [-b click_button] <-t trigger_button> <-i device_id>\n"
+	    "       or\n"
+	    "       %s --calibrate\n"
+	    "       or\n"
+	    "       %s --list\n",
+	    prog_name,
+	    prog_name,
+	    prog_name);
 }
 
 int main(int argc, char** argv)
@@ -284,7 +276,7 @@ int main(int argc, char** argv)
 		do_calibrate(display);
 		return 0;
 	}
-	
+
 	// List mode
 	if (opts.list_mode)
 	{
@@ -310,8 +302,6 @@ int main(int argc, char** argv)
 		msleep(opts.delay_ms);
 	}
 
-
 	XCloseDisplay(display);
 	return 0;
 }
-
