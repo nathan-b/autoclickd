@@ -13,6 +13,7 @@ typedef struct
 {
 	int click_button;
 	int trigger_button;
+	int device_id;
 	uint32_t delay_ms;
 
 	// Alternate modes
@@ -186,8 +187,9 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 {
 	// Set defaults
 	opts->click_button = 1;
-	opts->trigger_button = 9;
+	opts->trigger_button = -1;
 	opts->delay_ms = 50;
+	opts->device_id = -1;
 	opts->calibrate_mode = false;
 	opts->list_mode = false;
 
@@ -201,6 +203,7 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 			case 'd':
 			case 'b':
 			case 't':
+			case 'v':
 				if (i == argc - 1)
 				{
 					fprintf(stderr, "Parameter for %s missing\n", argv[i]);
@@ -219,6 +222,9 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 				break;
 			case 't': // Trigger
 				opts->trigger_button = strtol(argv[++i], NULL, 10);
+				break;
+			case 'v': // Device ID
+				opts->device_id = strtol(argv[++i], NULL, 10);
 				break;
 			case '-':
 				if (strcmp(argv[i], "--calibrate") == 0)
@@ -254,9 +260,9 @@ int main(int argc, char** argv)
 	Display* display = XOpenDisplay(NULL);
 	opts_t opts;
 
-	if (!read_opts(argc, argv, &opts))
+	if (!read_opts(argc, argv, &opts) || opts.device_id < 0 || opts.trigger_button < 0)
 	{
-		printf("Usage: %s [-d delay_ms] [-b click_button] [-t trigger_button]\n"
+		printf("Usage: %s [-d delay_ms] [-b click_button] <-t trigger_button> <-v device_id>\n"
 		       "       or\n"
 			   "       %s --calibrate\n",
 			   argv[0],
@@ -279,7 +285,7 @@ int main(int argc, char** argv)
 	}
 
 	// Normal operation
-	XDevice* device = XOpenDevice(display, 10);
+	XDevice* device = XOpenDevice(display, opts.device_id);
 
 	while (true)
 	{
