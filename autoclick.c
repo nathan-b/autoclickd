@@ -13,6 +13,7 @@ typedef struct
 	int click_button;
 	int trigger_button;
 	int device_id;
+	const char* device_name;
 	uint32_t delay_ms;
 
 	// Alternate modes
@@ -64,6 +65,34 @@ void find_mouse_device(Display* display)
 	}
 
 	XFreeDeviceList(info);
+}
+
+/**
+ * Return the device ID for the device with the given name, or -1 if not found.
+ */
+int get_device_id_from_name(Display* display, const char* name)
+{
+	XDeviceInfo* info;
+	int num_devices;
+	int ret = -1;
+
+	info = XListInputDevices(display, &num_devices);
+
+	for (int i = 0; i < num_devices; ++i)
+	{
+		if (info[i].use == IsXPointer || info[i].use == IsXExtensionPointer)
+		{
+			if (strcmp(name, info[i].name) == 0)
+			{
+				ret = (int)info[i].id;
+				break;
+			}
+		}
+	}
+
+	XFreeDeviceList(info);
+
+	return ret;
 }
 
 /**
@@ -181,6 +210,7 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 	opts->trigger_button = -1;
 	opts->delay_ms = 50;
 	opts->device_id = -1;
+	opts->device_name = NULL;
 	opts->calibrate_mode = false;
 	opts->list_mode = false;
 
@@ -217,6 +247,9 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 			case 'i':  // Device ID
 				opts->device_id = strtol(argv[++i], NULL, 10);
 				break;
+			case 'n':  // Device name
+				opts->device_name = argv[++i];
+				break;
 			case '-':
 				if (strcmp(argv[i], "--calibrate") == 0)
 				{
@@ -249,7 +282,7 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 void usage(const char* prog_name)
 {
 	printf(
-	    "Usage: %s [-d delay_ms] [-b click_button] <-t trigger_button> <-i device_id>\n"
+	    "Usage: %s [-d delay_ms] [-b click_button] <-t trigger_button> <-i device_id | -n device_name>\n"
 	    "       or\n"
 	    "       %s --calibrate\n"
 	    "       or\n"
@@ -268,6 +301,18 @@ int main(int argc, char** argv)
 	{
 		usage(argv[0]);
 		return EINVAL;
+	}
+
+	// If device name is specified, convert to device ID
+	if (opts.device_name != NULL)
+	{
+		if (opts.device_id > 0)
+		{
+			fprintf(stderr, "Cannot specify both device ID and device name\n");
+			usage(argv[0]);
+			return EINVAL;
+		}
+		opts.device_id = get_device_id_from_name(display, opts.device_name);
 	}
 
 	// Calibrate mode
@@ -291,6 +336,9 @@ int main(int argc, char** argv)
 		return EINVAL;
 	}
 
+	//
+	// Main program logic
+	//
 	XDevice* device = XOpenDevice(display, opts.device_id);
 
 	while (true)
