@@ -39,6 +39,8 @@ And so I did.
 * `-b`:  The ID of the button to click (defaults to `1`, which should be the left button)
 * `-t`:  The ID of the button to trigger the clicks
 * `-i`:  The device ID for the pointing device
+* `-n`:  The device name for the pointing device (specify either `-i` or `-n`, not both!)
+* `-f`:  Path to a config file
 
 You are not expected to know the X Windows button IDs or device IDs for your mouse off the top of your head. `autoclickd` can help!
 
@@ -50,7 +52,7 @@ $ ./ac --calibrate
 Press the mouse button you want to identify
 Found button: Logitech M570 -> device 10 button 9
 ```
-With this output, you should run `ac -i 10 -t 9` to get the desired results.
+With this output, you should run `ac -i 10 -t 9` or `ac -n "Logitech M570" -t 9` to get the desired results.
 
 ### List mode
 
@@ -63,3 +65,17 @@ Found pointing device (4): Nuvoton w836x7hg Infrared Remote Transceiver -> 12
 Found pointing device (4): Logitech M570 -> 10
 Found pointing device (4): Ergonomic Keyboard Consumer Control -> 14
 ```
+
+### Config file
+
+For convenience, it is possible to store the `autoclickd` configuration in a file and pass it in using `-f`.
+
+```
+$ ./ac -f autoclick.conf
+```
+
+An example configuration file is included in the repository. The configuration syntax is:
+```
+key_name: value
+```
+For string values, do not use quotation marks (they will be read as part of the value).
