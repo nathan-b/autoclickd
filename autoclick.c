@@ -13,14 +13,33 @@ typedef struct
 	int click_button;
 	int trigger_button;
 	int device_id;
-	const char* device_name;
+	char* device_name;
 	uint32_t delay_ms;
+	const char* config_filename;
 
 	// Alternate modes
 	bool calibrate_mode;
 	bool list_mode;
 } opts_t;
 
+typedef enum
+{
+	DELAY,
+	CLICK_BUTTON,
+	TRIGGER_BUTTON,
+	DEV_ID,
+	DEV_NAME,
+	COMMENT,
+	BLANK,
+	INVALID
+} config_type;
+
+
+bool read_opts(int argc, char** argv, opts_t* opts);
+
+/**
+ * Sleep for the specified number of milliseconds.
+ */
 void msleep(uint32_t ms)
 {
 	struct timespec ts;
@@ -195,12 +214,183 @@ void do_calibrate(Display* display)
 			{
 				printf("Found button: %s -> device %d button %d\n", info[i].name, (int)info[i].id, button);
 				found = true;
+				break;
 			}
 		}
 
 		XFreeDeviceList(info);
 	}
 	XUngrabPointer(display, CurrentTime);
+}
+
+/**
+ * Compare a line in the config file with the name of a config parameter.
+ *
+ * Sort of like strcmp but more casual with \0 terminators.
+ */
+bool comp(const char* config_line, const char* config_parm, size_t parmsize)
+{
+	if (strlen(config_line) < parmsize)
+	{
+		return false;
+	}
+	return memcmp(config_line, config_parm, parmsize) == 0;
+}
+
+/**
+ * Compare a key in the config file with the given option type.
+ */
+#define check_config(_str, _type)          \
+	parmsize = strlen(_str);               \
+	if (pos) *pos = parmsize + 1;          \
+	if (comp(config_line, _str, parmsize)) \
+	{                                      \
+		return _type;                      \
+	}
+
+config_type get_config_type(const char* config_line, size_t line_len, size_t* pos)
+{
+	bool start = true;
+	size_t parmsize = 0;
+
+	if (line_len == 0)
+	{
+		return BLANK;
+	}
+
+	for (size_t i = 0; i < line_len; ++i)
+	{
+		// Ignore leading whitespace
+		if (start && (config_line[i] == ' ' || config_line[i] == '\t'))
+		{
+			continue;
+		}
+
+		// EOL implies blank line
+		if (start && config_line[i] == '\n')
+		{
+			return BLANK;
+		}
+
+		// Check if this is a comment line
+		if (config_line[i] == '#')
+		{
+			if (start)
+			{
+				return COMMENT;
+			}
+			// I really don't think we should get here
+			return INVALID;
+		}
+
+		start = false;
+
+		// This switch just optimizes the number of strcmps we need to do
+		switch (config_line[i])
+		{
+		case 'c':
+			check_config("click_button", CLICK_BUTTON);
+			return INVALID;
+		case 't':
+			check_config("trigger_button", TRIGGER_BUTTON);
+			return INVALID;
+		case 'd':
+			check_config("delay", DELAY);
+			check_config("dev_id", DEV_ID);
+			check_config("dev_name", DEV_NAME);
+			return INVALID;
+		default:
+			return INVALID;
+		}
+	}
+	return INVALID;
+}
+
+/**
+ * Read an integer from a config file line.
+ */
+#define read_int(_dest)                      \
+	value = atoi(&line[pos]);                \
+	if (value > 0)                           \
+	{                                        \
+		_dest = value;                       \
+	}                                        \
+	else                                     \
+	{                                        \
+		fprintf(stderr, "Config error: Couldn't parse line '%s'\n", line); \
+		return false;                        \
+	}                                        \
+	break
+
+/**
+ * Gross config file parsing logic.
+ *
+ * Don't read this unless you absolutely have to.
+ */
+bool parse_config_file(const char* filename, opts_t* opts)
+{
+	FILE* fp = NULL;
+	char* line = NULL;
+	size_t line_len = 0;
+	ssize_t read_len = 0;
+	int value = -1;
+	int line_num = 0;
+
+	// Open the file
+	fp = fopen(filename, "r");
+	if (fp == NULL)
+	{
+		fprintf(stderr, "Error opening file %s for reading\n", filename);
+		return false;
+	}
+
+	// Read and process each line
+	while ((read_len = getline(&line, &line_len, fp)) != -1)
+	{
+		++line_num;
+		size_t pos;
+		config_type t = get_config_type(line, line_len, &pos);
+
+		// Read the value for the parameter
+		switch (t)
+		{
+		case DELAY:
+			read_int(opts->delay_ms);
+		case CLICK_BUTTON:
+			read_int(opts->click_button);
+		case DEV_ID:
+			read_int(opts->device_id);
+		case TRIGGER_BUTTON:
+			read_int(opts->trigger_button);
+		case DEV_NAME:
+		{
+			int i = 0;
+
+			// Allocate a buffer for the device name and copy the name from the file into it
+			// (this gets leaked but it doesn't matter)
+			opts->device_name = malloc(strlen(&line[pos]) * sizeof(char));
+			for (char c = line[pos++]; c != '#' && c != '\n' && c != '\0'; c = line[pos++])
+			{
+				opts->device_name[i++] = c;
+			}
+			opts->device_name[i] = '\0';
+		}
+			break;
+		case COMMENT:
+		case BLANK:
+			continue;
+		case INVALID:
+			fprintf(stderr, "Error reading config file on line %d\n", line_num);
+			return false;
+		}
+	}
+
+	fclose(fp);
+	if (line != NULL)
+	{
+		free(line);
+	}
+	return true;
 }
 
 bool read_opts(int argc, char** argv, opts_t* opts)
@@ -250,6 +440,9 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 			case 'n':  // Device name
 				opts->device_name = argv[++i];
 				break;
+			case 'f':  // Config file name
+				opts->config_filename = argv[++i];
+				return parse_config_file(opts->config_filename, opts);
 			case '-':
 				if (strcmp(argv[i], "--calibrate") == 0)
 				{
@@ -284,9 +477,12 @@ void usage(const char* prog_name)
 	printf(
 	    "Usage: %s [-d delay_ms] [-b click_button] <-t trigger_button> <-i device_id | -n device_name>\n"
 	    "       or\n"
+	    "       %s <-f path_to_config_file>\n"
+	    "       or\n"
 	    "       %s --calibrate\n"
 	    "       or\n"
 	    "       %s --list\n",
+	    prog_name,
 	    prog_name,
 	    prog_name,
 	    prog_name);
