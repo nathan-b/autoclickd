@@ -319,8 +319,7 @@ config_type get_config_type(const char* config_line, size_t line_len, size_t* po
 	{                                        \
 		fprintf(stderr, "Config error: Couldn't parse line '%s'\n", line); \
 		return false;                        \
-	}                                        \
-	break
+	}
 
 /**
  * Gross config file parsing logic.
@@ -356,19 +355,33 @@ bool parse_config_file(const char* filename, opts_t* opts)
 		{
 		case DELAY:
 			read_int(opts->delay_ms);
+			break;
 		case CLICK_BUTTON:
 			read_int(opts->click_button);
+			break;
 		case DEV_ID:
 			read_int(opts->device_id);
+			break;
 		case TRIGGER_BUTTON:
 			read_int(opts->trigger_button);
+			break;
 		case DEV_NAME:
 		{
 			int i = 0;
 
 			// Allocate a buffer for the device name and copy the name from the file into it
-			// (this gets leaked but it doesn't matter)
-			opts->device_name = malloc(strlen(&line[pos]) * sizeof(char));
+			// +1 for null terminator (this gets leaked but it doesn't matter)
+			opts->device_name = malloc(strlen(&line[pos]) + 1);
+			if (opts->device_name == NULL)
+			{
+				fprintf(stderr, "Memory allocation failed\n");
+				fclose(fp);
+				if (line != NULL)
+				{
+					free(line);
+				}
+				return false;
+			}
 			for (char c = line[pos++]; c != '#' && c != '\n' && c != '\0'; c = line[pos++])
 			{
 				opts->device_name[i++] = c;
@@ -450,7 +463,7 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 					// Calibrate mode overrides other options
 					return true;
 				}
-				else if (strcmp(argv[1], "--list") == 0)
+				else if (strcmp(argv[i], "--list") == 0)
 				{
 					opts->list_mode = true;
 					// List mode overrides other options
@@ -488,10 +501,17 @@ void usage(const char* prog_name)
 	    prog_name);
 }
 
+#ifndef TEST_BUILD
 int main(int argc, char** argv)
 {
 	Display* display = XOpenDisplay(NULL);
 	opts_t opts;
+
+	if (display == NULL)
+	{
+		fprintf(stderr, "Cannot open X display\n");
+		return 1;
+	}
 
 	if (!read_opts(argc, argv, &opts))
 	{
@@ -506,9 +526,16 @@ int main(int argc, char** argv)
 		{
 			fprintf(stderr, "Cannot specify both device ID and device name\n");
 			usage(argv[0]);
+			XCloseDisplay(display);
 			return EINVAL;
 		}
 		opts.device_id = get_device_id_from_name(display, opts.device_name);
+		if (opts.device_id < 0)
+		{
+			fprintf(stderr, "Device '%s' not found. Use --list to see available devices.\n", opts.device_name);
+			XCloseDisplay(display);
+			return EINVAL;
+		}
 	}
 
 	// Calibrate mode
@@ -537,6 +564,13 @@ int main(int argc, char** argv)
 	//
 	XDevice* device = XOpenDevice(display, opts.device_id);
 
+	if (device == NULL)
+	{
+		fprintf(stderr, "Cannot open device with ID %d\n", opts.device_id);
+		XCloseDisplay(display);
+		return 1;
+	}
+
 	while (true)
 	{
 		if (check_button_state(display, device, opts.trigger_button))
@@ -549,3 +583,4 @@ int main(int argc, char** argv)
 	XCloseDisplay(display);
 	return 0;
 }
+#endif  // TEST_BUILD
