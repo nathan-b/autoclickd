@@ -213,6 +213,9 @@ void do_calibrate(Display* display)
 			if (button > 0)
 			{
 				printf("Found button: %s -> device %d button %d\n", info[i].name, (int)info[i].id, button);
+				printf("\nTo use this button as a trigger, run one of these commands:\n");
+				printf("  ./ac -i %d -t %d\n", (int)info[i].id, button);
+				printf("  ./ac -n \"%s\" -t %d\n", info[i].name, button);
 				found = true;
 				break;
 			}

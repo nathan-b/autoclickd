@@ -31,6 +31,47 @@ And so I did.
 
 `autoclickd` has a somewhat reasonable Makefile. Just type `make` and it will build. You have to have `libxtst`, `libx11`, and `libxi` installed. If you don't, it won't work. Bummer.
 
+Available build targets:
+* `make` or `make debug` - Build debug version with debugging symbols
+* `make release` - Build optimized release version
+* `make clean` - Remove built binaries
+* `make test` - Build and run unit tests (requires CMocka)
+
+## Testing
+
+`autoclickd` includes a unit test suite using the CMocka testing framework.
+
+### Prerequisites
+
+To run the tests, you need to install CMocka:
+
+**Debian/Ubuntu:**
+```bash
+sudo apt-get install libcmocka-dev
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S cmocka
+```
+
+**Fedora/RHEL:**
+```bash
+sudo dnf install libcmocka-devel
+```
+
+### Running Tests
+
+```bash
+make test
+```
+
+The test suite includes tests covering:
+* Config file parsing and validation
+* Command-line option parsing
+* Error handling for invalid inputs
+* Default value initialization
+
 ## Running
 
 `autoclickd` takes a rather arcane series of parameters:
@@ -51,8 +92,12 @@ If you run `ac --calibrate`, you are given an interactive prompt where you're as
 $ ./ac --calibrate
 Press the mouse button you want to identify
 Found button: Logitech M570 -> device 10 button 9
+
+To use this button as a trigger, run one of these commands:
+  ./ac -i 10 -t 9
+  ./ac -n "Logitech M570" -t 9
 ```
-With this output, you should run `ac -i 10 -t 9` or `ac -n "Logitech M570" -t 9` to get the desired results.
+You can copy and paste either command to start the autoclicker.
 
 ### List mode
 
@@ -76,6 +121,6 @@ $ ./ac -f autoclick.conf
 
 An example configuration file is included in the repository. The configuration syntax is:
 ```
-key_name: value
+key_name value
 ```
-For string values, do not use quotation marks (they will be read as part of the value).
+For string values, do not use quotation marks (they will be read as part of the value). Comments can be added with `#`.
