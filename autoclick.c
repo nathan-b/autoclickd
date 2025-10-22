@@ -1,4 +1,5 @@
 #include <X11/extensions/XTest.h>
+#include <X11/extensions/XInput2.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -20,6 +21,9 @@ typedef struct
 	// Alternate modes
 	bool calibrate_mode;
 	bool list_mode;
+
+	// Button behavior
+	bool disable_default_action;
 } opts_t;
 
 typedef enum
@@ -157,6 +161,51 @@ int find_pressed_button(Display* display, XDevice* device, int num_buttons)
 		}
 	}
 	return -1;
+}
+
+/**
+ * Disable the default action of a button using XI2 grab.
+ * Returns true on success, false on failure.
+ */
+bool disable_button_default_action(Display* display, int device_id, int button)
+{
+	XIEventMask mask;
+	unsigned char mask_data[XIMaskLen(XI_LASTEVENT)] = {0};
+
+	mask.deviceid = device_id;
+	mask.mask_len = sizeof(mask_data);
+	mask.mask = mask_data;
+
+	// We don't need any events, we just want to grab the button
+	XISetMask(mask_data, XI_ButtonPress);
+	XISetMask(mask_data, XI_ButtonRelease);
+
+	XIGrabModifiers modifiers = {XIAnyModifier, 0};  // Any modifiers
+
+	// Grab the button on the root window
+	Window root = DefaultRootWindow(display);
+
+	int result = XIGrabButton(display,
+	                          device_id,
+	                          button,
+	                          root,
+	                          None,
+	                          XIGrabModeSync,
+	                          XIGrabModeAsync,
+	                          False,
+	                          &mask,
+	                          1,
+	                          &modifiers);
+
+	if (result != 0)
+	{
+		return false;
+	}
+
+	// Allow events to be processed but don't propagate them to other clients
+	XIAllowEvents(display, device_id, XIAsyncDevice, CurrentTime);
+
+	return true;
 }
 
 /**
@@ -419,6 +468,7 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 	opts->device_name = NULL;
 	opts->calibrate_mode = false;
 	opts->list_mode = false;
+	opts->disable_default_action = true;
 
 	for (int i = 1; i < argc; ++i)
 	{
@@ -472,6 +522,11 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 					// List mode overrides other options
 					return true;
 				}
+				else if (strcmp(argv[i], "--no-disable-default") == 0)
+				{
+					opts->disable_default_action = false;
+					break;
+				}
 				fprintf(stderr, "Unknown option %s\n", argv[i]);
 				return false;
 			default:
@@ -491,13 +546,24 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 void usage(const char* prog_name)
 {
 	printf(
-	    "Usage: %s [-d delay_ms] [-b click_button] <-t trigger_button> <-i device_id | -n device_name>\n"
+	    "Usage: %s [-d delay_ms] [-b click_button] [--no-disable-default] <-t trigger_button> <-i device_id | -n device_name>\n"
 	    "       or\n"
 	    "       %s <-f path_to_config_file>\n"
 	    "       or\n"
 	    "       %s --calibrate\n"
 	    "       or\n"
-	    "       %s --list\n",
+	    "       %s --list\n"
+	    "\n"
+	    "Options:\n"
+	    "  -d delay_ms              Delay between clicks in milliseconds (default: 50)\n"
+	    "  -b click_button          Button ID to click (default: 1)\n"
+	    "  -t trigger_button        Button ID that triggers clicks (required)\n"
+	    "  -i device_id             Device ID for the pointing device\n"
+	    "  -n device_name           Device name for the pointing device\n"
+	    "  -f config_file           Path to configuration file\n"
+	    "  --no-disable-default     Don't disable the trigger button's default action\n"
+	    "  --calibrate              Interactive mode to identify button IDs\n"
+	    "  --list                   List all pointing devices\n",
 	    prog_name,
 	    prog_name,
 	    prog_name,
@@ -572,6 +638,17 @@ int main(int argc, char** argv)
 		fprintf(stderr, "Cannot open device with ID %d\n", opts.device_id);
 		XCloseDisplay(display);
 		return 1;
+	}
+
+	// Disable the default action of the trigger button if requested
+	if (opts.disable_default_action)
+	{
+		if (!disable_button_default_action(display, opts.device_id, opts.trigger_button))
+		{
+			fprintf(stderr, "Warning: Failed to disable default action for button %d\n", opts.trigger_button);
+			fprintf(stderr, "The button will still trigger its normal action.\n");
+			fprintf(stderr, "You can suppress this with --no-disable-default\n");
+		}
 	}
 
 	while (true)

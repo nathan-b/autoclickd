@@ -471,6 +471,34 @@ static void test_read_opts_unknown_long_option(void** state)
 	assert_false(result);
 }
 
+static void test_read_opts_no_disable_default(void** state)
+{
+	(void)state;
+
+	char* argv[] = {"ac", "--no-disable-default", "-t", "9", "-i", "10"};
+	int argc = 6;
+	opts_t opts = {0};
+
+	bool result = read_opts(argc, argv, &opts);
+
+	assert_true(result);
+	assert_false(opts.disable_default_action);
+}
+
+static void test_read_opts_disable_default_is_default(void** state)
+{
+	(void)state;
+
+	char* argv[] = {"ac", "-t", "9", "-i", "10"};
+	int argc = 5;
+	opts_t opts = {0};
+
+	bool result = read_opts(argc, argv, &opts);
+
+	assert_true(result);
+	assert_true(opts.disable_default_action);
+}
+
 //
 // Test main
 //
@@ -514,6 +542,8 @@ int main(void)
 		cmocka_unit_test(test_read_opts_invalid_option),
 		cmocka_unit_test(test_read_opts_missing_parameter),
 		cmocka_unit_test(test_read_opts_unknown_long_option),
+		cmocka_unit_test(test_read_opts_no_disable_default),
+		cmocka_unit_test(test_read_opts_disable_default_is_default),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

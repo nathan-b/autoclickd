@@ -66,9 +66,9 @@ sudo dnf install libcmocka-devel
 make test
 ```
 
-The test suite includes tests covering:
+The test suite includes 31 tests covering:
 * Config file parsing and validation
-* Command-line option parsing
+* Command-line option parsing (including --no-disable-default)
 * Error handling for invalid inputs
 * Default value initialization
 
@@ -78,12 +78,29 @@ The test suite includes tests covering:
 
 * `-d`:  The number of milliseconds to delay in between clicks (defaults to `50`, which provides 20 clicks/sec)
 * `-b`:  The ID of the button to click (defaults to `1`, which should be the left button)
-* `-t`:  The ID of the button to trigger the clicks
+* `-t`:  The ID of the button to trigger the clicks (required)
 * `-i`:  The device ID for the pointing device
 * `-n`:  The device name for the pointing device (specify either `-i` or `-n`, not both!)
 * `-f`:  Path to a config file
+* `--no-disable-default`:  Don't disable the trigger button's default action (see below)
 
 You are not expected to know the X Windows button IDs or device IDs for your mouse off the top of your head. `autoclickd` can help!
+
+### Disabling the trigger button's default action
+
+By default, `autoclickd` disables the normal action of the trigger button while the program is running. This prevents the button from performing its usual function (e.g., "Back" navigation, special mouse actions) when you're using it as a trigger.
+
+For example, if you use mouse button 9 (typically the "Back" button) as your trigger, `autoclickd` will prevent it from navigating back in your browser while the autoclicker is active.
+
+The button grab is automatically released when the program exits, restoring normal button behavior.
+
+If you want to keep the button's default action (allowing it to trigger clicks AND perform its normal function), use the `--no-disable-default` option:
+
+```bash
+./ac -i 10 -t 9 --no-disable-default
+```
+
+Note: This feature uses the XInput2 extension to grab the button. If the grab fails, you'll see a warning message, but the autoclicker will still work (the button will just keep its default action).
 
 ### Calibrate mode
 
