@@ -13,6 +13,7 @@ typedef struct
 {
 	int click_button;
 	int trigger_button;
+	int toggle_button;
 	int device_id;
 	char* device_name;
 	uint32_t delay_ms;
@@ -31,6 +32,7 @@ typedef enum
 	DELAY,
 	CLICK_BUTTON,
 	TRIGGER_BUTTON,
+	TOGGLE_BUTTON,
 	DEV_ID,
 	DEV_NAME,
 	COMMENT,
@@ -345,6 +347,7 @@ config_type get_config_type(const char* config_line, size_t line_len, size_t* po
 			return INVALID;
 		case 't':
 			check_config("trigger_button", TRIGGER_BUTTON);
+			check_config("toggle_button", TOGGLE_BUTTON);
 			return INVALID;
 		case 'd':
 			check_config("delay", DELAY);
@@ -417,6 +420,9 @@ bool parse_config_file(const char* filename, opts_t* opts)
 		case TRIGGER_BUTTON:
 			read_int(opts->trigger_button);
 			break;
+		case TOGGLE_BUTTON:
+			read_int(opts->toggle_button);
+			break;
 		case DEV_NAME:
 		{
 			int i = 0;
@@ -463,6 +469,7 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 	// Set defaults
 	opts->click_button = 1;
 	opts->trigger_button = -1;
+	opts->toggle_button = -1;
 	opts->delay_ms = 50;
 	opts->device_id = -1;
 	opts->device_name = NULL;
@@ -480,7 +487,10 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 			case 'd':
 			case 'b':
 			case 't':
-			case 'v':
+			case 'g':
+			case 'i':
+			case 'n':
+			case 'f':
 				if (i == argc - 1)
 				{
 					fprintf(stderr, "Parameter for %s missing\n", argv[i]);
@@ -499,6 +509,9 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 				break;
 			case 't':  // Trigger
 				opts->trigger_button = strtol(argv[++i], NULL, 10);
+				break;
+			case 'g':  // Toggle
+				opts->toggle_button = strtol(argv[++i], NULL, 10);
 				break;
 			case 'i':  // Device ID
 				opts->device_id = strtol(argv[++i], NULL, 10);
@@ -546,7 +559,7 @@ bool read_opts(int argc, char** argv, opts_t* opts)
 void usage(const char* prog_name)
 {
 	printf(
-	    "Usage: %s [-d delay_ms] [-b click_button] [--no-disable-default] <-t trigger_button> <-i device_id | -n device_name>\n"
+	    "Usage: %s [-d delay_ms] [-b click_button] [--no-disable-default] <-t trigger_button | -g toggle_button> <-i device_id | -n device_name>\n"
 	    "       or\n"
 	    "       %s <-f path_to_config_file>\n"
 	    "       or\n"
@@ -557,13 +570,20 @@ void usage(const char* prog_name)
 	    "Options:\n"
 	    "  -d delay_ms              Delay between clicks in milliseconds (default: 50)\n"
 	    "  -b click_button          Button ID to click (default: 1)\n"
-	    "  -t trigger_button        Button ID that triggers clicks (required)\n"
+	    "  -t trigger_button        Button ID that triggers clicks while held\n"
+	    "  -g toggle_button         Button ID that toggles clicking on/off\n"
 	    "  -i device_id             Device ID for the pointing device\n"
 	    "  -n device_name           Device name for the pointing device\n"
 	    "  -f config_file           Path to configuration file\n"
-	    "  --no-disable-default     Don't disable the trigger button's default action\n"
+	    "  --no-disable-default     Don't disable button's default action\n"
 	    "  --calibrate              Interactive mode to identify button IDs\n"
-	    "  --list                   List all pointing devices\n",
+	    "  --list                   List all pointing devices\n"
+	    "\n"
+	    "Notes:\n"
+	    "  - At least one of -t or -g is required\n"
+	    "  - Both -t and -g can be used together (must be different buttons)\n"
+	    "  - Trigger button (-t): Clicks while the button is held down\n"
+	    "  - Toggle button (-g): First press starts clicking, second press stops\n",
 	    prog_name,
 	    prog_name,
 	    prog_name,
@@ -621,10 +641,26 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
-	// Normal operation
-	if (opts.device_id < 0 || opts.trigger_button < 0)
+	// Normal operation - validate required options
+	if (opts.device_id < 0)
 	{
+		fprintf(stderr, "Error: Device ID or device name is required\n");
 		usage(argv[0]);
+		return EINVAL;
+	}
+
+	if (opts.trigger_button < 0 && opts.toggle_button < 0)
+	{
+		fprintf(stderr, "Error: At least one of -t (trigger) or -g (toggle) is required\n");
+		usage(argv[0]);
+		return EINVAL;
+	}
+
+	// Validate that trigger and toggle buttons are different if both specified
+	if (opts.trigger_button >= 0 && opts.toggle_button >= 0 &&
+	    opts.trigger_button == opts.toggle_button)
+	{
+		fprintf(stderr, "Error: Trigger button (-t) and toggle button (-g) must be different\n");
 		return EINVAL;
 	}
 
@@ -640,23 +676,72 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	// Disable the default action of the trigger button if requested
+	// Disable the default action of buttons if requested
 	if (opts.disable_default_action)
 	{
-		if (!disable_button_default_action(display, opts.device_id, opts.trigger_button))
+		if (opts.trigger_button >= 0)
 		{
-			fprintf(stderr, "Warning: Failed to disable default action for button %d\n", opts.trigger_button);
-			fprintf(stderr, "The button will still trigger its normal action.\n");
-			fprintf(stderr, "You can suppress this with --no-disable-default\n");
+			if (!disable_button_default_action(display, opts.device_id, opts.trigger_button))
+			{
+				fprintf(stderr, "Warning: Failed to disable default action for trigger button %d\n", opts.trigger_button);
+				fprintf(stderr, "The button will still trigger its normal action.\n");
+				fprintf(stderr, "You can suppress this with --no-disable-default\n");
+			}
+		}
+		if (opts.toggle_button >= 0)
+		{
+			if (!disable_button_default_action(display, opts.device_id, opts.toggle_button))
+			{
+				fprintf(stderr, "Warning: Failed to disable default action for toggle button %d\n", opts.toggle_button);
+				fprintf(stderr, "The button will still trigger its normal action.\n");
+				fprintf(stderr, "You can suppress this with --no-disable-default\n");
+			}
 		}
 	}
 
+	// State tracking for toggle button
+	bool toggle_active = false;
+	bool toggle_prev_pressed = false;
+
 	while (true)
 	{
-		if (check_button_state(display, device, opts.trigger_button))
+		bool should_click = false;
+
+		// Check trigger button if specified
+		if (opts.trigger_button >= 0)
+		{
+			if (check_button_state(display, device, opts.trigger_button))
+			{
+				should_click = true;
+			}
+		}
+
+		// Check toggle button if specified
+		if (opts.toggle_button >= 0)
+		{
+			bool toggle_pressed = check_button_state(display, device, opts.toggle_button);
+
+			// Detect transition from not-pressed to pressed (button press event)
+			if (toggle_pressed && !toggle_prev_pressed)
+			{
+				toggle_active = !toggle_active;
+			}
+
+			toggle_prev_pressed = toggle_pressed;
+
+			// If toggle is active, we should click
+			if (toggle_active)
+			{
+				should_click = true;
+			}
+		}
+
+		// Perform click if any condition is met
+		if (should_click)
 		{
 			do_click(display, opts.click_button);
 		}
+
 		msleep(opts.delay_ms);
 	}
 

@@ -66,9 +66,9 @@ sudo dnf install libcmocka-devel
 make test
 ```
 
-The test suite includes 31 tests covering:
-* Config file parsing and validation
-* Command-line option parsing (including --no-disable-default)
+The test suite includes 37 tests covering:
+* Config file parsing and validation (including toggle_button)
+* Command-line option parsing (including -g toggle, --no-disable-default)
 * Error handling for invalid inputs
 * Default value initialization
 
@@ -78,29 +78,51 @@ The test suite includes 31 tests covering:
 
 * `-d`:  The number of milliseconds to delay in between clicks (defaults to `50`, which provides 20 clicks/sec)
 * `-b`:  The ID of the button to click (defaults to `1`, which should be the left button)
-* `-t`:  The ID of the button to trigger the clicks (required)
+* `-t`:  The ID of the button that triggers clicks while held
+* `-g`:  The ID of the button that toggles clicking on/off
 * `-i`:  The device ID for the pointing device
 * `-n`:  The device name for the pointing device (specify either `-i` or `-n`, not both!)
 * `-f`:  Path to a config file
-* `--no-disable-default`:  Don't disable the trigger button's default action (see below)
+* `--no-disable-default`:  Don't disable button's default action (see below)
+
+**Note:** At least one of `-t` or `-g` is required. You can use both together if they're different buttons.
 
 You are not expected to know the X Windows button IDs or device IDs for your mouse off the top of your head. `autoclickd` can help!
 
-### Disabling the trigger button's default action
+### Trigger vs Toggle modes
 
-By default, `autoclickd` disables the normal action of the trigger button while the program is running. This prevents the button from performing its usual function (e.g., "Back" navigation, special mouse actions) when you're using it as a trigger.
+`autoclickd` supports two different modes for controlling when clicks happen:
+
+**Trigger mode (`-t`)**: Clicks continuously while the button is held down. Release the button to stop clicking.
+```bash
+./ac -i 10 -t 9  # Clicks while button 9 is held
+```
+
+**Toggle mode (`-g`)**: First press starts clicking, second press stops. No need to hold the button down.
+```bash
+./ac -i 10 -g 9  # Press button 9 to start, press again to stop
+```
+
+**Both modes together**: You can use both if you want multiple ways to control clicking.
+```bash
+./ac -i 10 -t 9 -g 8  # Button 9 triggers while held, button 8 toggles on/off
+```
+
+### Disabling button default actions
+
+By default, `autoclickd` disables the normal action of trigger/toggle buttons while the program is running. This prevents the buttons from performing their usual functions (e.g., "Back" navigation, special mouse actions).
 
 For example, if you use mouse button 9 (typically the "Back" button) as your trigger, `autoclickd` will prevent it from navigating back in your browser while the autoclicker is active.
 
 The button grab is automatically released when the program exits, restoring normal button behavior.
 
-If you want to keep the button's default action (allowing it to trigger clicks AND perform its normal function), use the `--no-disable-default` option:
+If you want to keep the button's default action (allowing it to control clicks AND perform its normal function), use the `--no-disable-default` option:
 
 ```bash
 ./ac -i 10 -t 9 --no-disable-default
 ```
 
-Note: This feature uses the XInput2 extension to grab the button. If the grab fails, you'll see a warning message, but the autoclicker will still work (the button will just keep its default action).
+Note: This feature uses the XInput2 extension to grab the buttons. If the grab fails, you'll see a warning message, but the autoclicker will still work (the buttons will just keep their default actions).
 
 ### Calibrate mode
 
@@ -140,4 +162,13 @@ An example configuration file is included in the repository. The configuration s
 ```
 key_name value
 ```
+
+Supported configuration keys:
+* `delay` - Delay between clicks in milliseconds
+* `click_button` - Button ID to click
+* `trigger_button` - Button ID that triggers clicks while held
+* `toggle_button` - Button ID that toggles clicking on/off
+* `dev_id` - Device ID
+* `dev_name` - Device name
+
 For string values, do not use quotation marks (they will be read as part of the value). Comments can be added with `#`.
