@@ -1,5 +1,5 @@
 #include <X11/extensions/XTest.h>
-#include <X11/extensions/XInput2.h>
+#include <X11/extensions/XInput.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -166,46 +166,31 @@ int find_pressed_button(Display* display, XDevice* device, int num_buttons)
 }
 
 /**
- * Disable the default action of a button using XI2 grab.
+ * Disable the default action of a button using XI1 grab.
  * Returns true on success, false on failure.
  */
-bool disable_button_default_action(Display* display, int device_id, int button)
+bool disable_button_default_action(Display* display, XDevice* device, int button)
 {
-	XIEventMask mask;
-	unsigned char mask_data[XIMaskLen(XI_LASTEVENT)] = {0};
-
-	mask.deviceid = device_id;
-	mask.mask_len = sizeof(mask_data);
-	mask.mask = mask_data;
-
-	// We don't need any events, we just want to grab the button
-	XISetMask(mask_data, XI_ButtonPress);
-	XISetMask(mask_data, XI_ButtonRelease);
-
-	XIGrabModifiers modifiers = {XIAnyModifier, 0};  // Any modifiers
-
-	// Grab the button on the root window
 	Window root = DefaultRootWindow(display);
 
-	int result = XIGrabButton(display,
-	                          device_id,
-	                          button,
-	                          root,
-	                          None,
-	                          XIGrabModeSync,
-	                          XIGrabModeAsync,
-	                          False,
-	                          &mask,
-	                          1,
-	                          &modifiers);
+	// Use XI1 XGrabDeviceButton instead of XI2 XIGrabButton
+	// This should be more compatible with our XI1 polling approach
+	int result = XGrabDeviceButton(display,
+	                               device,
+	                               button,
+	                               AnyModifier,
+	                               NULL,           // modifier_device
+	                               root,
+	                               True,           // owner_events
+	                               0,              // event_count (we don't want events)
+	                               NULL,           // event_list
+	                               GrabModeAsync,  // this_device_mode
+	                               GrabModeAsync); // other_devices_mode
 
-	if (result != 0)
+	if (result != Success)
 	{
 		return false;
 	}
-
-	// Allow events to be processed but don't propagate them to other clients
-	XIAllowEvents(display, device_id, XIAsyncDevice, CurrentTime);
 
 	return true;
 }
@@ -681,7 +666,7 @@ int main(int argc, char** argv)
 	{
 		if (opts.trigger_button >= 0)
 		{
-			if (!disable_button_default_action(display, opts.device_id, opts.trigger_button))
+			if (!disable_button_default_action(display, device, opts.trigger_button))
 			{
 				fprintf(stderr, "Warning: Failed to disable default action for trigger button %d\n", opts.trigger_button);
 				fprintf(stderr, "The button will still trigger its normal action.\n");
@@ -690,7 +675,7 @@ int main(int argc, char** argv)
 		}
 		if (opts.toggle_button >= 0)
 		{
-			if (!disable_button_default_action(display, opts.device_id, opts.toggle_button))
+			if (!disable_button_default_action(display, device, opts.toggle_button))
 			{
 				fprintf(stderr, "Warning: Failed to disable default action for toggle button %d\n", opts.toggle_button);
 				fprintf(stderr, "The button will still trigger its normal action.\n");
